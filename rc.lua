@@ -657,8 +657,9 @@ screen.connect_signal("request::desktop_decoration", function(s)
         np_container
         --testwidget
     }
-    
-    s.myinfobar.widget:set_ratio(4, 0.2)
+    for i, r in pairs({ 0.15, 0.15, 0.15, 0.2, 0.15, 0.2 }) do
+        s.myinfobar.widget:set_ratio(i, r)
+    end
 end)
 
 -- }}}
