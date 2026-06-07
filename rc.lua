@@ -135,11 +135,6 @@ function sleep (n)
     os.execute("sleep " .. tonumber(n))
 end
 
-
-function run_once(prg)
-    -- Run a program only if it is not already running.
-    awful.util.spawn_with_shell("pgrep -u $USER -x " .. prg .. " || (" .. prg .. ")")
-end
 -- }}}
 
 -- {{{ Menu
@@ -920,13 +915,6 @@ awful.keyboard.append_global_keybindings({
                 {description = "take screenshot and upload to remote server (selection)", group = "screen"}),
     awful.key({ modkey, "Shift"   }, "Print",     function() awful.util.spawn("sshost-wl cloud fs") end,
                 {description = "take screenshot and upload to remote server (fullscreen)", group = "screen"}),
-    
-    -- Toggle screen configurations
-    -- Note: Dell Latitude 5520 has a screen switch button (at F8 key) but this
-    -- seems to be interpreted by system as modkey+p.
-    -- see https://bbs.archlinux.org/viewtopic.php?id=188599
-    awful.key({ modkey,           }, "p", function() xrandr.xrandr() end,
-                {description = "Switch video mode", group="screen"})
 })
 
 client.connect_signal("request::default_mousebindings", function()
