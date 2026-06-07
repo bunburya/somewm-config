@@ -129,7 +129,7 @@ function splitstr(inputstr, sep)
         table.insert(t, str)
     end
     return t
-
+end
 
 function sleep (n)
     os.execute("sleep " .. tonumber(n))
@@ -438,19 +438,18 @@ local cpu_widget = {
 
 -- Net usage widget
 local netstats = {up = 0, down = 0}
-local netwidget = wibox.widget.textbox()
-awful.spawn.with_line_callback("bash -c 'while true; do grep wlan0 /proc/net/dev; sleep 2; done'", {
-    stdout = function(line)
-        local down, up = utils.parse_net_dev(line)
-        if down and up then
-            local d_down = math.floor((down - netstats["down"]) / 2)
-            local d_up = math.floor((up - netstats["up"]) / 2)
-            netstats["down"] = down
-            netstats["up"] = up
-            netwidget:set_markup(string.format("<b>NET:</b> %s ↑ %s ↓", utils.format_bytes(d_up), utils.format_bytes(d_down)))
-        end
-    end
-})
+local net_count_interval = 2
+netwidget = awful.widget.watch("grep wlan0 /proc/net/dev", net_count_interval, function(widget, stdout)
+    local down, up = utils.parse_net_dev(stdout)
+    -- divide by two to get per-second value
+    local d_down = math.floor((down - netstats["down"]) / net_count_interval)
+    local d_up = math.floor((up - netstats["up"]) / net_count_interval)
+    netstats["down"] = down
+    netstats["up"] = up
+    down_hr = utils.format_bytes(d_down)
+    up_hr = utils.format_bytes(d_up)
+    widget:set_markup(string.format("<b>NET:</b> %s ↑ %s ↓", up_hr, down_hr))
+end)
 
 -- Hard drive usage widget
 local mountpoints = { ["/"] = "main", ["/mnt/storage"] = "storage" }
