@@ -23,12 +23,15 @@ local hotkeys_popup = require("awful.hotkeys_popup")
 -- when client with a matching name is opened:
 require("awful.hotkeys_popup.keys")
 
-local utils = require("utils")
+local custom_widgets = require("custom_widgets")
 
 -- {{{ Input configuration
 
 awful.input.xkb_layout = "ie"
 awful.input.send_events_mode = "disbled_on_external_mouse"
+awful.input.middle_button_emulation = 1
+awful.input.tap_to_click = 1
+awful.input.tap_button_map = "lmr"
 awesome._set_keyboard_setting("numlock", true)
 
 -- }}}
@@ -269,240 +272,6 @@ end)
 
 -- {{{ Wibar
 
--- Define custom widgets and behaviour relating to them.
-
--- Separators
-
-local bar_sep = wibox.widget.textbox()
-bar_sep:set_text(" | ")
-local space_sep = wibox.widget.textbox()
-space_sep:set_text(" ")
-
--- Volume widget
-
-local vol_level = wibox.widget.textbox()
-local vol_icon = wibox.widget.imagebox()
-vol_icon:set_image("/home/alan/.config/awesome/themes/custom/speaker.png")
-local vol_widget = {vol_icon, vol_level}
-
-function update_volume()
-	awful.spawn.easy_async("amixer -c 0 sget Master", update_vol_widget)
-end
-
-function update_vol_widget(stdout, stderr, exitreason, exitcode)
-	-- stdout here is the output of calling amixer -c 0 sget Master
-
-	local level, sound_status = string.match(stdout, "%[(%d+%%)%] %[%-?%d+%.%d%ddB%] %[(%a+)%]")
-	text = " <b>" .. level .. "</b>"
-    if sound_status == "off" then
-        text = "<span color=\"red\">" .. text .. "</span>"
-    end
-	vol_level:set_markup(text)
-end
-
-function handle_alsa_event(stdout)
-    update_volume(vol_level)
-end
-
-update_volume(vol_level)
-awful.spawn.with_line_callback("unbuffer alsactl monitor", { stdout = handle_alsa_event })	
-
-
-
--- Battery widget
-
--- Displays battery charge as %, and indicates charging/discharging
--- status with +/- after the battery level.
--- Color coding and notifications alert user if battery is reaching
--- very low levels.
-local bat_status = {
-    present = nil,
-    dis_charge = nil,
-    level = nil
-}
-
-local bat_icon_imagebox = wibox.widget.imagebox()
-bat_icon_imagebox:set_image("/home/alan/.config/awesome/themes/custom/battery.png")
-local bat_level_textbox = wibox.widget.textbox()
-
-
--- Set the initial status
-local init_bat_status = io.popen("acpi -b"):read("*all")
-if init_bat_status == "" then
-    bat_status.present = false
-else
-    bat_status.present = true
-    local dis_charge, level = string.match(init_bat_status, "(%a+), (%d+)%%")
-    if dis_charge == "Full" then
-        bat_status.dis_charge = "FullyCharged"
-    else
-        bat_status.dis_charge = dis_charge
-    end
-    bat_status.level = tonumber(level)
-end
-
-function update_bat_widget(widget, status)
-	if not status.present then
-		text = " <b>removed</b> "
-	else		
-		if status.dis_charge == "Discharging" then
-			if status.level <= 10 then
-				text = ' <b><span color="red">' .. status.level .. '%-</span></b> '
-				naughty.notify({ 
-                    text = "Battery is running low.\n" .. status.level .. "% remaining.",
-                    title = "Low battery" 
-                })
-			else
-				text = " <b>" .. status.level .. "%-</b> "
-			end
-		elseif status.dis_charge == "Charging" then
-			text = " <b>" .. status.level .. "%+</b> "
-		elseif status.dis_charge == "FullyCharged" then
-			text = ' <b><span color="green">' .. status.level .. '%</span></b> '
-		end
-	end
-	widget:set_markup(text)
-end
-
-local dbus = dbus
-
-dbus.add_match(
-    "system",
-    "type='signal',"
-        .."interface='org.freedesktop.DBus.Properties',"
-        .."member='PropertiesChanged',"
-        .."path='/org/freedesktop/UPower/devices/battery_BAT0'"
-)
-
-local dbus_vals = {
-    "Unknown",
-    "Charging",
-    "Discharging",
-    "Empty",
-    "FullyCharged",
-    "PendingCharge",
-    "PendingDischarge"
-}
-dbus.connect_signal("org.freedesktop.DBus.Properties", function(...)
-    local args = { ... }
-    if args[1].path ~= "/org/freedesktop/UPower/devices/battery_BAT0" then return end
-    local values = args[3]
-    if values["State"] ~= nil then bat_status.dis_charge = dbus_vals[values["State"]+1] end
-    if values["Percentage"] ~= nil then bat_status.level = math.ceil(values["Percentage"]) end
-
-    update_bat_widget(bat_level_textbox, bat_status)
-end)
-
-
-
-local bat_widget = {bat_icon_imagebox, bat_level_textbox}
-update_bat_widget(bat_level_textbox, bat_status)
-
--- RAM widget
-
-local memwidget = awful.widget.watch("free --bytes", 2, function(widget, stdout)
-    local used, total = utils.parse_free(stdout)
-    local pct = math.floor((used / total) * 100)
-    widget:set_markup(string.format("<b>RAM:</b> %s (%d%%)", utils.format_bytes(used), pct))
-end)
- 
--- CPU usage widget
-local cpu_use_text = wibox.widget.textbox()
-local cpu_temp_text = wibox.widget.textbox()
-
-function handle_mpstat_output(stdout)
-    if string.find(stdout, "all") then
-        local idle = tonumber(splitstr(stdout)[12])
-        local busy = 100 - idle
-        cpu_use_text:set_markup(math.floor(busy+0.5).."%")
-    end
-end
-
-awful.spawn.with_line_callback('mpstat 3', {stdout = handle_mpstat_output})
-        
--- Check CPU temp.  The bash outputs CPU temp in a format like "41.2°C"
-awful.widget.watch('bash -c "sensors | grep \\"Package id 0:\\" | awk -F \' \' \'{print $4}\' | cut -c 2-"', 5,
-		function(w, s)
-			-- strip spaces and newline from output of cputemp
-			w:set_markup('('..string.gsub(s, "%s*\n", "")..')') 
-		end, cpu_temp_text)
-
--- Combine both of these CPU widgets into a single wibox
-local cpu_widget = {
-    wibox.widget.textbox("<b>CPU: </b>"),
-    cpu_use_text,
-    space_sep,
-    cpu_temp_text,
-    layout=wibox.layout.fixed.horizontal
-}
-
--- Net usage widget
-local netstats = {up = 0, down = 0}
-local net_count_interval = 2
-netwidget = awful.widget.watch("grep wlan0 /proc/net/dev", net_count_interval, function(widget, stdout)
-    local down, up = utils.parse_net_dev(stdout)
-    -- divide by two to get per-second value
-    local d_down = math.floor((down - netstats["down"]) / net_count_interval)
-    local d_up = math.floor((up - netstats["up"]) / net_count_interval)
-    netstats["down"] = down
-    netstats["up"] = up
-    down_hr = utils.format_bytes(d_down)
-    up_hr = utils.format_bytes(d_up)
-    widget:set_markup(string.format("<b>NET:</b> %s ↑ %s ↓", up_hr, down_hr))
-end)
-
--- Hard drive usage widget
-local mountpoints = { ["/"] = "main", ["/mnt/storage"] = "storage" }
-local hdwidget = awful.widget.watch("df", 5, function(widget, stdout)
-    local stats = utils.parse_df(stdout, mountpoints)
-    local main = stats["main"]
-    local main_total = main[1] / 1000000
-    local main_used = main[2] / 1000000
-    local storage = stats["storage"]
-    local storage_total = storage[1] / 1000000
-    local storage_used = storage[2] / 1000000
-    widget:set_markup(string.format("<b>main:</b> %.1f / %.1f GB <b>storage:</b> %.1f / %.1f GB", main_used, main_total, storage_used, storage_total))
-end)
-
--- Pending upgrades widget
-local udwidget = awful.widget.watch("bash -c \"trizen -Qu | wc -l\"", 300, function(widget, stdout)
-    widget:set_markup(string.format("<b>UPDATES:</b> %d", stdout))
-end)
-
--- Now Playing widget
-
-local np_cmd = "playerctl --format '{{status}} {{artist}} - {{title}}' -F metadata"
-
-function get_now_playing(output_str)
-    -- Parse output of playerctl and get message to display
-    local i, _ = string.find(output_str, ' ')
-    local status = string.sub(output_str, 0, i-1)
-    if status == "Paused" or status == "Stopped" then return "N/A" end
-    return ' ' .. string.sub(output_str, i+1) .. ' '
-end
-
-local np_label = wibox.widget.textbox("<b>PLAYING:</b> ")
-local np_textbox = wibox.widget.textbox("N/A")
-
-awful.spawn.with_line_callback(np_cmd, {stdout = function(line)
-    np_textbox:set_markup(get_now_playing(line))      
-end})
-
-local np_scrollbox = wibox.container.scroll.horizontal(np_textbox)
-
-local np_container = {
-    layout = wibox.layout.fixed.horizontal,
-    np_label,
-    np_scrollbox
-}
-
-
--- TEST
-
-local testwidget = awful.widget.watch("date", 1)
-
--- }}}
-
 -- Unless there is a compelling reason to do otherwise, add new tags to the end.
 -- Otherwise we have to go and change the rules relating to specific apps later on.
 
@@ -517,10 +286,10 @@ local spare_tag_names = {'spare'}
 local spare_tag_layouts = {layouts[1]}
 
 -- Keyboard map indicator and switcher
-mykeyboardlayout = awful.widget.keyboardlayout()
+local mykeyboardlayout = awful.widget.keyboardlayout()
 
 -- Create a textclock widget
-mytextclock = wibox.widget.textclock()
+local mytextclock = wibox.widget.textclock()
 
 screen.connect_signal("request::desktop_decoration", function(s)
     -- Restore saved tags if this output was previously removed
@@ -629,12 +398,10 @@ screen.connect_signal("request::desktop_decoration", function(s)
             { -- Right widgets
                 layout = wibox.layout.fixed.horizontal,
                 wibox.widget.systray(),
-                space_sep,
-                vol_icon,
-                vol_level,
-                space_sep,
-                bat_icon_imagebox,
-                bat_level_textbox,
+                custom_widgets.space_sep,
+                custom_widgets.volume,
+                custom_widgets.space_sep,
+                custom_widgets.battery,
                 mytextclock,
                 s.mylayoutbox,
             },
@@ -649,13 +416,12 @@ screen.connect_signal("request::desktop_decoration", function(s)
         layout = wibox.layout.ratio.horizontal,
         spacing_widget = wibox.widget.separator,
         spacing = 10,
-        memwidget,
-        cpu_widget,
-        netwidget,
-        hdwidget,
-        udwidget,
-        np_container
-        --testwidget
+        custom_widgets.memory,
+        custom_widgets.cpu,
+        custom_widgets.net,
+        custom_widgets.hdd,
+        custom_widgets.updates,
+        custom_widgets.now_playing
     }
     for i, r in pairs({ 0.15, 0.15, 0.15, 0.2, 0.15, 0.2 }) do
         s.myinfobar.widget:set_ratio(i, r)
