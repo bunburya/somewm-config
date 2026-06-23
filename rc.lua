@@ -122,22 +122,6 @@ fm = "pcmanfm"
 -- Whether the info bar at the bottom is visible
 info_vis = false
 
--- Useful functions
-function splitstr(inputstr, sep)
-    if sep == nil then
-        sep = "%s"
-    end
-    local t={}
-    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-        table.insert(t, str)
-    end
-    return t
-end
-
-function sleep (n)
-    os.execute("sleep " .. tonumber(n))
-end
-
 -- }}}
 
 -- {{{ Menu
@@ -673,11 +657,11 @@ awful.keyboard.append_global_keybindings({
                 
     -- Screenshots
     -- sleep() is required in these functions to give awesome time to hand control of the keyboard over to scrot
-    awful.key({                   }, "Print",     function() sleep(0.5); awful.util.spawn("sshost-wl") end,
+    awful.key({                   }, "Print",     function() utils.sleep(0.5); awful.util.spawn("sshost-wl") end,
                 {description = "take screenshot and save locally (selection)", group = "screen"}),
-    awful.key({ "Shift",          }, "Print",     function() sleep(0.5); awful.util.spawn("sshost-wl fs") end,
+    awful.key({ "Shift",          }, "Print",     function() utils.sleep(0.5); awful.util.spawn("sshost-wl fs") end,
                 {description = "take screenshot and save locally (fullscreen)", group = "screen"}),
-    awful.key({ modkey,           }, "Print",     function() sleep(0.5); awful.util.spawn("sshost-wl cloud") end,
+    awful.key({ modkey,           }, "Print",     function() utils.sleep(0.5); awful.util.spawn("sshost-wl cloud") end,
                 {description = "take screenshot and upload to remote server (selection)", group = "screen"}),
     awful.key({ modkey, "Shift"   }, "Print",     function() awful.util.spawn("sshost-wl cloud fs") end,
                 {description = "take screenshot and upload to remote server (fullscreen)", group = "screen"}),

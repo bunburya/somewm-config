@@ -70,5 +70,23 @@ function utils.parse_net_dev(output)
     return tonumber(down), tonumber(up)
 end
 
+function utils.splitstr(inputstr, sep)
+    -- Split `inputstr` on `sep`, returning a table. `sep` can be a regex and defaults to `%s`
+    -- (ie, whitespace).
+    if sep == nil then
+        sep = "%s"
+    end
+    local t={}
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+        table.insert(t, str)
+    end
+    return t
+end
+
+function utils.sleep (n)
+    
+    os.execute("sleep " .. tonumber(n))
+end
+
 
 return utils
